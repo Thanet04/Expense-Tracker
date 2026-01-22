@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { CoinMascot } from '../components/Coin'
 import { Eye, EyeOff, Lock, User, Mail, ArrowLeft } from 'lucide-react'
+import { authService } from '../services/auth.service'
+import type { ApiError } from '../types/auth.types'
 
 interface SignUpProps {
     onSignUp: () => void
@@ -9,6 +11,8 @@ interface SignUpProps {
 
 export function SignUp({ onSignUp, onLoginClick }: SignUpProps) {
     const [showPassword, setShowPassword] = useState(false)
+    const [isLoading, setIsLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -16,9 +20,43 @@ export function SignUp({ onSignUp, onLoginClick }: SignUpProps) {
         confirmPassword: '',
     })
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        onSignUp()
+        setError(null)
+
+        // Validate password confirmation
+        if (formData.password !== formData.confirmPassword) {
+            setError('Passwords do not match')
+            return
+        }
+
+        if (formData.password.length < 6) {
+            setError('Password must be at least 6 characters')
+            return
+        }
+
+        setIsLoading(true)
+
+        try {
+            const response = await authService.signUp({
+                name: formData.name,
+                email: formData.email,
+                password: formData.password,
+            })
+
+            // Store token in localStorage (optional, depending on your auth strategy)
+            if (response.data.token) {
+                localStorage.setItem('token', response.data.token)
+                localStorage.setItem('user', JSON.stringify(response.data))
+            }
+
+            onSignUp()
+        } catch (err) {
+            const apiError = err as ApiError
+            setError(apiError.message || 'Failed to sign up. Please try again.')
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     return (
@@ -101,11 +139,42 @@ export function SignUp({ onSignUp, onLoginClick }: SignUpProps) {
                         </div>
                     </div>
 
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">
+                            Confirm Password
+                        </label>
+                        <div className="relative group">
+                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-emerald-500 transition-colors" size={20} />
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                required
+                                value={formData.confirmPassword}
+                                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                placeholder="Confirm your password"
+                                className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-emerald-500 rounded-2xl py-4 pl-12 pr-12 outline-none transition-all font-medium text-gray-900 placeholder:text-gray-300"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                            </button>
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+                            <p className="text-sm text-red-600 text-center">{error}</p>
+                        </div>
+                    )}
+
                     <button
                         type="submit"
-                        className="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg shadow-lg shadow-emerald-200 transition-all active:scale-95 mt-2"
+                        disabled={isLoading}
+                        className="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white font-bold text-lg shadow-lg shadow-emerald-200 transition-all active:scale-95 mt-2"
                     >
-                        Sign Up
+                        {isLoading ? 'Signing Up...' : 'Sign Up'}
                     </button>
                 </form>
 

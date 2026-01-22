@@ -8,9 +8,17 @@ import { SignUp } from './pages/SignUp'
 type Screen = 'login' | 'signup' | 'home' | 'add' | 'history'
 
 export function App() {
-  const [currentScreen, setCurrentScreen] = useState<Screen>('login')
+  const [currentScreen, setCurrentScreen] = useState<Screen>(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem('token')
+    return token ? 'home' : 'login'
+  })
 
-  const handleLogout = () => setCurrentScreen('login')
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    setCurrentScreen('login')
+  }
 
   return (
     <>

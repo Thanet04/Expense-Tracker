@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { CoinMascot } from '../components/Coin'
 import { Eye, EyeOff, Lock, User } from 'lucide-react'
+import { authService } from '../services/auth.service'
+import type { ApiError } from '../types/auth.types'
 
 interface LoginProps {
     onLogin: () => void
@@ -11,10 +13,30 @@ export function Login({ onLogin, onSignUpClick }: LoginProps) {
     const [showPassword, setShowPassword] = useState(false)
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [isLoading, setIsLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()
-        onLogin()
+        setError(null)
+        setIsLoading(true)
+
+        try {
+            const response = await authService.signIn({ email, password })
+            
+            // Store token in localStorage (optional, depending on your auth strategy)
+            if (response.data.token) {
+                localStorage.setItem('token', response.data.token)
+                localStorage.setItem('user', JSON.stringify(response.data))
+            }
+
+            onLogin()
+        } catch (err) {
+            const apiError = err as ApiError
+            setError(apiError.message || 'Failed to sign in. Please try again.')
+        } finally {
+            setIsLoading(false)
+        }
     }
 
     return (
@@ -77,11 +99,18 @@ export function Login({ onLogin, onSignUpClick }: LoginProps) {
                         </div> */}
                     </div>
 
+                    {error && (
+                        <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+                            <p className="text-sm text-red-600 text-center">{error}</p>
+                        </div>
+                    )}
+
                     <button
                         type="submit"
-                        className="w-full py-4 rounded-2xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-lg shadow-lg shadow-blue-200 transition-all active:scale-95 mt-4"
+                        disabled={isLoading}
+                        className="w-full py-4 rounded-2xl bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed text-white font-bold text-lg shadow-lg shadow-blue-200 transition-all active:scale-95 mt-4"
                     >
-                        Sign In
+                        {isLoading ? 'Signing In...' : 'Sign In'}
                     </button>
                 </form>
 

@@ -54,6 +54,17 @@ export function BottomNav({
               History
             </span>
           </button>
+
+          <button
+            onClick={onLogout}
+            className="flex flex-col items-center gap-1 transition-colors text-red-400 hover:text-red-500"
+            aria-label="Logout"
+          >
+            <LogOut size={24} strokeWidth={2} />
+            <span className="text-[10px] font-medium">
+              Logout
+            </span>
+          </button>
         </div>
       </div>
 

@@ -5,39 +5,15 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-const data = [
-  {
-    name: 'Jan',
-    income: 4000,
-    expense: 2400,
-  },
-  {
-    name: 'Feb',
-    income: 3000,
-    expense: 1398,
-  },
-  {
-    name: 'Mar',
-    income: 2000,
-    expense: 9800,
-  },
-  {
-    name: 'Apr',
-    income: 2780,
-    expense: 3908,
-  },
-  {
-    name: 'May',
-    income: 1890,
-    expense: 4800,
-  },
-  {
-    name: 'Jun',
-    income: 2390,
-    expense: 3800,
-  },
-]
-export function MonthlyChart() {
+interface MonthlyChartProps {
+  data?: {
+    name: string
+    income: number
+    expense: number
+  }[]
+}
+
+export function MonthlyChart({ data = [] }: MonthlyChartProps) {
   return (
     <div className="w-full h-64 md:h-96 bg-white rounded-3xl p-6 shadow-sm border border-gray-50">
       <div className="flex items-center justify-between mb-6">
@@ -77,6 +53,7 @@ export function MonthlyChart() {
                 border: 'none',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
               }}
+              formatter={(value: number | undefined) => [value ? `฿${value.toLocaleString()}` : '฿0']}
             />
             <Bar
               dataKey="income"

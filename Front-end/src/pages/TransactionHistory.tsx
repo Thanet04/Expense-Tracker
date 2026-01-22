@@ -1,6 +1,10 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { CoinMascot } from '../components/Coin'
 import { BottomNav } from '../components/BottomNav'
+import { transactionService } from '../services/transaction.service'
+import { summaryService } from '../services/summary.service'
+import type { Transaction as ApiTransaction } from '../types/transaction.types'
+import type { FinancialSummary } from '../types/summary.types'
 import {
   Utensils,
   Bus,
@@ -13,11 +17,13 @@ import {
   TrendingUp,
   Gift,
 } from 'lucide-react'
+
 interface TransactionHistoryProps {
   onHomeClick?: () => void
   onAddClick?: () => void
   onLogout?: () => void
 }
+
 type TransactionType = 'income' | 'expense'
 type CategoryId =
   | 'food'
@@ -30,6 +36,8 @@ type CategoryId =
   | 'other'
   | 'freelance'
   | 'investment'
+
+// UI Transaction Interface (slightly different from API)
 interface Transaction {
   id: string
   type: TransactionType
@@ -38,11 +46,13 @@ interface Transaction {
   amount: number
   time: string
 }
+
 interface TransactionGroup {
   date: string
   transactions: Transaction[]
 }
-const categoryIcons: Record<CategoryId, React.ElementType> = {
+
+const categoryIcons: Record<string, React.ElementType> = {
   food: Utensils,
   transport: Bus,
   shopping: ShoppingBag,
@@ -54,98 +64,10 @@ const categoryIcons: Record<CategoryId, React.ElementType> = {
   freelance: TrendingUp,
   investment: Gift,
 }
-// Mock data
-const transactionGroups: TransactionGroup[] = [
-  {
-    date: 'Today',
-    transactions: [
-      {
-        id: '1',
-        type: 'expense',
-        category: 'food',
-        title: 'Coffee Shop',
-        amount: 150,
-        time: '2:30 PM',
-      },
-      {
-        id: '2',
-        type: 'expense',
-        category: 'transport',
-        title: 'Taxi Ride',
-        amount: 250,
-        time: '11:45 AM',
-      },
-      {
-        id: '3',
-        type: 'income',
-        category: 'freelance',
-        title: 'Client Payment',
-        amount: 5000,
-        time: '9:00 AM',
-      },
-    ],
-  },
-  {
-    date: 'Yesterday',
-    transactions: [
-      {
-        id: '4',
-        type: 'expense',
-        category: 'shopping',
-        title: 'Grocery Store',
-        amount: 2400,
-        time: '6:15 PM',
-      },
-      {
-        id: '5',
-        type: 'expense',
-        category: 'entertainment',
-        title: 'Movie Tickets',
-        amount: 600,
-        time: '3:00 PM',
-      },
-      {
-        id: '6',
-        type: 'income',
-        category: 'salary',
-        title: 'Monthly Salary',
-        amount: 25000,
-        time: '10:00 AM',
-      },
-    ],
-  },
-  {
-    date: 'This Week',
-    transactions: [
-      {
-        id: '7',
-        type: 'expense',
-        category: 'bills',
-        title: 'Electricity Bill',
-        amount: 1200,
-        time: 'Mon 4:30 PM',
-      },
-      {
-        id: '8',
-        type: 'expense',
-        category: 'health',
-        title: 'Pharmacy',
-        amount: 450,
-        time: 'Sun 11:20 AM',
-      },
-      {
-        id: '9',
-        type: 'income',
-        category: 'investment',
-        title: 'Dividend',
-        amount: 3500,
-        time: 'Sat 9:15 AM',
-      },
-    ],
-  },
-]
+
 function TransactionItem({ transaction }: { transaction: Transaction }) {
-  const Icon = categoryIcons[transaction.category]
+  // Fallback to 'other' icon if category doesn't match
+  const Icon = categoryIcons[transaction.category] || categoryIcons.other
   const isIncome = transaction.type === 'income'
   return (
     <div className="flex items-center justify-between py-4 px-1 group">
@@ -175,11 +97,109 @@ function TransactionItem({ transaction }: { transaction: Transaction }) {
     </div>
   )
 }
+
 export function TransactionHistory({
   onHomeClick,
   onAddClick,
   onLogout,
 }: TransactionHistoryProps) {
+  const [transactionGroups, setTransactionGroups] = useState<TransactionGroup[]>([])
+  const [summary, setSummary] = useState<FinancialSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const currentDate = new Date()
+        const currentMonth = currentDate.getMonth() + 1 // 1-12
+        const currentYear = currentDate.getFullYear()
+
+        const [transactionsResponse, summaryResponse] = await Promise.all([
+          transactionService.getTransactions({
+            limit: 50,
+            month: currentMonth,
+            year: currentYear
+          }),
+          // Fetch summary for the current month
+          summaryService.getFinancialSummary({
+            month: currentMonth,
+            year: currentYear
+          })
+        ])
+
+        const groups = groupTransactionsByDate(transactionsResponse.data.transactions)
+        setTransactionGroups(groups)
+        setSummary(summaryResponse.data)
+      } catch (err) {
+        setError('Failed to load data')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  // Helper to group transactions
+  const groupTransactionsByDate = (transactions: ApiTransaction[]): TransactionGroup[] => {
+    const groups: Record<string, Transaction[]> = {}
+
+    transactions.forEach((t) => {
+      // Parse date to get "Today", "Yesterday", or "DD MMM"
+      const dateObj = new Date(t.date)
+      const dateKey = getDateLabel(dateObj)
+
+      if (!groups[dateKey]) {
+        groups[dateKey] = []
+      }
+
+      groups[dateKey].push({
+        id: t.id,
+        type: t.type,
+        category: t.category as CategoryId, // Assumes API returns valid category strings
+        title: t.title,
+        amount: t.amount,
+        time: t.time, // Using the pre-formatted time from API or formatting it here
+      })
+    })
+
+    // Convert to array
+    return Object.entries(groups).map(([date, transactions]) => ({
+      date,
+      transactions,
+    }))
+  }
+
+  const getDateLabel = (date: Date): string => {
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    if (isSameDay(date, today)) return 'Today'
+    if (isSameDay(date, yesterday)) return 'Yesterday'
+
+    // Check for "This Week" logic if needed, or just return date string
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+  }
+
+  const isSameDay = (d1: Date, d2: Date) => {
+    return (
+      d1.getDate() === d2.getDate() &&
+      d1.getMonth() === d2.getMonth() &&
+      d1.getFullYear() === d2.getFullYear()
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center text-gray-400">
+        Loading...
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-white text-gray-900 pb-24 font-sans md:pb-0 md:ml-64 transition-all duration-300">
       <main className="max-w-md mx-auto md:max-w-7xl md:p-12 md:mx-0">
@@ -210,15 +230,17 @@ export function TransactionHistory({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Total Income</p>
-                    <p className="text-2xl font-bold text-emerald-600">+฿33,500</p>
+                    <p className="text-2xl font-bold text-emerald-600">+฿{summary?.totalIncome.toLocaleString() ?? '0'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Total Expense</p>
-                    <p className="text-2xl font-bold text-blue-600">-฿5,050</p>
+                    <p className="text-2xl font-bold text-blue-600">-฿{summary?.totalExpense.toLocaleString() ?? '0'}</p>
                   </div>
                 </div>
               </div>
             </div>
+
+            {error && <div className="text-red-500 text-center py-4">{error}</div>}
 
             {transactionGroups.map((group, groupIndex) => (
               <div key={groupIndex}>
@@ -241,6 +263,12 @@ export function TransactionHistory({
                 </div>
               </div>
             ))}
+
+            {transactionGroups.length === 0 && !error && (
+              <div className="text-center py-12 text-gray-400">
+                No transactions found.
+              </div>
+            )}
           </div>
 
           {/* Desktop Summary Sidebar */}
@@ -251,21 +279,14 @@ export function TransactionHistory({
                 <div className="space-y-6">
                   <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
                     <p className="text-xs font-medium text-emerald-600 mb-1 uppercase tracking-wider">Total Income</p>
-                    <p className="text-3xl font-bold text-emerald-700">+฿33,500</p>
-                    <p className="text-xs text-emerald-500 mt-2 flex items-center gap-1">
-                      <TrendingUp size={14} /> +12% from last month
-                    </p>
+                    <p className="text-3xl font-bold text-emerald-700">+฿{summary?.totalIncome.toLocaleString() ?? '0'}</p>
                   </div>
 
                   <div className="p-4 rounded-2xl bg-blue-50 border border-blue-100">
                     <p className="text-xs font-medium text-blue-600 mb-1 uppercase tracking-wider">Total Expense</p>
-                    <p className="text-3xl font-bold text-blue-700">-฿5,050</p>
-                    <p className="text-xs text-blue-500 mt-2 flex items-center gap-1">
-                      <TrendingUp size={14} className="rotate-180" /> -5% from last month
-                    </p>
+                    <p className="text-3xl font-bold text-blue-700">-฿{summary?.totalExpense.toLocaleString() ?? '0'}</p>
                   </div>
                 </div>
-
               </div>
             </div>
           </div>
