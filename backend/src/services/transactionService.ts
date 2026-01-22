@@ -59,10 +59,8 @@ export const getTransactionsByUserId = async (
     }
   }
 
-  // Get total count for pagination
   const total = await Transaction.countDocuments(query);
 
-  // Get transactions with pagination
   const transactions = await Transaction.find(query)
     .sort({ date: -1, createdAt: -1 })
     .skip(skip)
@@ -220,7 +218,6 @@ export const getFinancialSummary = async (
   // Get transactions matching the filters
   const transactions = await Transaction.find(query).exec();
 
-  // Calculate totals
   let totalIncome = 0;
   let totalExpense = 0;
 

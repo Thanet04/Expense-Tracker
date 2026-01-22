@@ -54,7 +54,6 @@ const TransactionSchema: Schema = new Schema(
   }
 );
 
-// Index for faster queries
 TransactionSchema.index({ userId: 1, date: -1 });
 TransactionSchema.index({ userId: 1, type: 1, date: -1 });
 TransactionSchema.index({ userId: 1, category: 1 });
